@@ -61,9 +61,9 @@ void ImageQuilt::synthesize()
 		col = 0;
 	}
 
-	output_image->cielab2xyz();
-	output_image->xyz2rgb();
-	stbi_write_bmp(output_filename.c_str(), output_width, output_height, 3, output_image->data);
+	// output_image->cielab2xyz();
+	// output_image->xyz2rgb();
+	// stbi_write_bmp(output_filename.c_str(), output_width, output_height, 3, output_image->data);
 
 	/**
 	 * @brief 2. Put the remaining tiles, start placing them from left to right, top to bottom
@@ -207,10 +207,9 @@ void ImageQuilt::synthesize()
 		}}
 
 		delete patch;
-		// write to file
-		output_image->cielab2xyz();
-		output_image->xyz2rgb();
-		stbi_write_bmp(output_filename.c_str(), output_width, output_height, 3, output_image->data);
+		// output_image->cielab2xyz();
+		// output_image->xyz2rgb();
+		// stbi_write_bmp(output_filename.c_str(), output_width, output_height, 3, output_image->data);
 	}}
 	// store the result to .bmp
 
