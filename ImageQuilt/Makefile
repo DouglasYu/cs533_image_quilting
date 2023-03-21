@@ -11,7 +11,7 @@ PARALLEL_OBJS_v1 = $(PARALLEL_SRCS_v1:.cpp=.o)
 
 CXXFLAGS = -std=c++11 -Wall -Iextlibs/include/ -IImageQuilt/
 
-all: clean $(SERIAL_TARGET)
+all: clean $(SERIAL_TARGET) $(PARALLEL_TARGET_v1)
 
 $(SERIAL_TARGET): $(SERIAL_OBJS)
 	$(CC) $(CXXFLAGS) $^ -o $@
