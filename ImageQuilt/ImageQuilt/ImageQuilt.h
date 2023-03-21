@@ -4,6 +4,8 @@
 #include <iostream>
 #include <time.h>
 #include "custom_types.h"
+#include <math.h>       /* round, floor, ceil, trunc */
+
 
 using std::string;
 class ImageQuilt

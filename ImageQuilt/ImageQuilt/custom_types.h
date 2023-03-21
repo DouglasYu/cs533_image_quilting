@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <stdint.h>
+#include <cfloat>
 
 
 class Image {

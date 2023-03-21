@@ -5,11 +5,11 @@
 #include <queue>
 #define STBI_ONLY_BMP
 #define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
+#include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include <stb_image_write.h>
+#include "stb_image_write.h"
 
-#include <Windows.h>
+// #include <Windows.h>
 
 //#define USE_RGB
 //#define USE_HSV
@@ -253,7 +253,7 @@ void ImageQuilt::synthesize()
 			double err = distances[distances.size() - randNum - 1].second;
 			cout << "Picked: " << randNum << " out of: " << matches << " with error: " << err << " lowest: " << lowest << endl;
 			outFile << "Picked: " << randNum << " out of: " << matches << " with error: " << err << " lowest: " << lowest << endl;
-			Patch* patch = new Patch(patch_w, patch_h, tilesize, input_image);
+			Patch* patch = new Patch(patch_w, patch_h, tilesize, tilesize, input_image);
 #ifdef USE_HSV
 			patch->image->rgb2hsv();
 #elif defined USE_XYZ
@@ -346,7 +346,7 @@ Patch * ImageQuilt::randomPatch()
 {
 	unsigned int w = 0;//rand() % (input_image->width - tilesize);
 	unsigned int h = 0;//rand() % (input_image->height - tilesize);
-	Patch* p = new Patch(w, h, tilesize, input_image);
+	Patch* p = new Patch(w, h, tilesize, tilesize, input_image);
 	return p;
 }
 

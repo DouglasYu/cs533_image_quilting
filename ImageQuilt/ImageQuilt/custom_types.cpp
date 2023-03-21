@@ -1,6 +1,7 @@
 #include "custom_types.h"
 #include <stdlib.h>
 #include <vector>
+#include <math.h>
 
 Image::Image(unsigned int _w, unsigned int _h)
 {
@@ -186,7 +187,7 @@ void Image::rgb2xyz(precision r, precision g, precision b, precision* x, precisi
 	g = g * 100;
 	b = b * 100;
 
-	//Observer. = 2°, Illuminant = D65
+	//Observer. = 2ï¿½, Illuminant = D65
 	*x = r * 0.4124f + g * 0.3576f + b * 0.1805f;
 	*y = r * 0.2126f + g * 0.7152f + b * 0.0722f;
 	*z = r * 0.0193f + g * 0.1192f + b * 0.9505f;
@@ -211,7 +212,7 @@ void Image::xyz2rgb()
 }
 void Image::xyz2rgb(precision* r, precision* g, precision* b, precision x, precision y, precision z)
 {
-	x = x / 100;       //X from 0 to  95.047      (Observer = 2°, Illuminant = D65)
+	x = x / 100;       //X from 0 to  95.047      (Observer = 2ï¿½, Illuminant = D65)
 	y = y / 100;        //Y from 0 to 100.000
 	z = z / 100;        //Z from 0 to 108.883
 
@@ -327,7 +328,7 @@ void Image::cielab2xyz(precision* x, precision* y, precision* z, precision l, pr
 	else
 		*z = ((*z)*116 - 16) / k;
 
-	*x = ref_X * (*x);     //ref_X =  95.047     Observer= 2°, Illuminant= D65
+	*x = ref_X * (*x);     //ref_X =  95.047     Observer= 2ï¿½, Illuminant= D65
 	*y = ref_Y * (*y);     //ref_Y = 100.000
 	*z = ref_Z * (*z);    //ref_Z = 108.883
 }
