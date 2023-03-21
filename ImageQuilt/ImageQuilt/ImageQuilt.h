@@ -44,15 +44,15 @@ private:
 	inline double errorCalc(unsigned int in_w, unsigned int in_h, unsigned out_w, unsigned int out_h) const;
 	std::vector<int>* minCut(unsigned int pos_w, unsigned int pos_h, unsigned int patch_w, unsigned int patch_h, const bool left);
 
-	string input_filename;
-	string output_filename;
-	unsigned int tilesize;
-	unsigned int num_tiles;
-	unsigned int output_width;
-	unsigned int output_height;
-	unsigned int overlap;
-	double error;
-	Image* input_image;
-	Image* output_image;
+	string input_filename = {};
+	string output_filename = {};
+	unsigned int tilesize = {};
+	unsigned int num_tiles = {};
+	unsigned int output_width = {};
+	unsigned int output_height = {};
+	unsigned int overlap = {};
+	double error = {};
+	Image* input_image = {};
+	Image* output_image = {};
 };
 

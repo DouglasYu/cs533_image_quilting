@@ -2,6 +2,7 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <climits>
 #include <queue>
 #define STBI_ONLY_BMP
 #define STB_IMAGE_IMPLEMENTATION

@@ -9,12 +9,12 @@ class Image {
 public:
 	typedef double precision;
 
-	unsigned int width;
-	unsigned int height;
-	uint8_t* data;
-	precision* hsv_data;
-	precision* xyz_data;
-	precision* cielab_data;
+	unsigned int width = {};
+	unsigned int height = {};
+	uint8_t* data = {};
+	precision* hsv_data = {};
+	precision* xyz_data = {};
+	precision* cielab_data = {};
 
 	Image(unsigned int _w, unsigned int _h);
 	Image(unsigned int _w, unsigned int _h, uint8_t* _data) : width(_w), height(_h), data(_data) {}
@@ -72,11 +72,12 @@ public:
 
 class Patch {
 public:
-	unsigned int wLocation;
-	unsigned int hLocation;
-	unsigned int tilesize_w, tilesize_h;
-	double error;
-	Image* image;
+	unsigned int wLocation = {};
+	unsigned int hLocation = {};
+	unsigned int tilesize_w = {};
+	unsigned int tilesize_h = {};
+	double error = {};
+	Image* image = {};
 	Patch(unsigned int _w, unsigned int _h, unsigned int _tilesize_w, unsigned int _tilesize_h, Image* source) : wLocation(_w), hLocation(_h), tilesize_w(_tilesize_w), tilesize_h(_tilesize_h), error(DBL_MAX)
 	{
 		image = new Image(tilesize_w, tilesize_h);

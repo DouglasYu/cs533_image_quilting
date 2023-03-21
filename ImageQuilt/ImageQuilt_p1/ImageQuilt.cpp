@@ -3,6 +3,7 @@
 #include <iostream>
 #include <fstream>
 #include <queue>
+#include <climits>
 #define STBI_ONLY_BMP
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
