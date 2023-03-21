@@ -9,7 +9,7 @@ PARALLEL_TARGET_v1 = ImageQuiltBin_p1
 PARALLEL_SRCS_v1 = $(wildcard ./ImageQuilt_p1/*.cpp)
 PARALLEL_OBJS_v1 = $(PARALLEL_SRCS_v1:.cpp=.o)
 
-CXXFLAGS = -std=c++11 -g -Wall -Iextlibs/include/ -IImageQuilt/ 
+CXXFLAGS = -std=c++11 -O2 -Wall -Iextlibs/include/ -IImageQuilt/ 
 
 all: clean $(SERIAL_TARGET) $(PARALLEL_TARGET_v1)
 

@@ -132,13 +132,13 @@ void ImageQuilt::synthesize()
 				pair<pair<int, int>, double> element(location, sum);
 				distances.push_back(element);
 				found_zero = true;
-				cout << "zero" << endl;
+				// cout << "zero" << endl;
 				goto scan_finish;
 			}
 			else if (sum <= (1+error)*lowest) {
 				if (sum < lowest) {
 					lowest = sum;
-					cout << "Lowest: " << lowest << endl;
+					// cout << "Lowest: " << lowest << endl;
 				}
 				pair<int, int> location(img_w, img_h);
 				pair<pair<int, int>, double> element(location, sum);
