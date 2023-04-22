@@ -151,8 +151,8 @@ void ImageQuilt::put_tile(unsigned int tile_hi, unsigned int tile_wi, int id) {
 	unsigned int patch_w = distances[distances.size() - randNum - 1].first.first;
 	unsigned int patch_h = distances[distances.size() - randNum - 1].first.second;
 	double err = distances[distances.size() - randNum - 1].second;
-	printf("%d/%d (thread %d) ", tile_hi*num_tiles + tile_wi + 1, total_tiles, id);
-	cout << "Picked: " << randNum << " out of: " << matches << " with error: " << err << " lowest: " << lowest << endl;
+	// printf("%d/%d (thread %d) ", tile_hi*num_tiles + tile_wi + 1, total_tiles, id);
+	// cout << "Picked: " << randNum << " out of: " << matches << " with error: " << err << " lowest: " << lowest << endl;
 	// printf("[Test] Thread %d completed (%d, %d)\n", id, tile_wi, tile_hi);
 	
 	/** 
@@ -220,6 +220,7 @@ bool ImageQuilt::updateCursor(int *x, int *y, int offset) {
 			return false;
 		}
 	}
+	// printf("[Test] (%d, %d)/%d + %d = (%d, %d)/%d\n", *x, *y, *y*num_tiles+*x, offset, xn, yn, yn*num_tiles+xn);
 	*x = xn;
 	*y = yn;
 	return true;
@@ -230,6 +231,8 @@ void ImageQuilt::put_tile_thread (int id) {
 	int tile_wi = 0;	// x
 	int tile_hi = 0; 	// y
 	int count = 0;
+
+	std::vector<int> v;
 
 	updateCursor(&tile_wi, &tile_hi, id+1);
 	do {
@@ -242,6 +245,7 @@ void ImageQuilt::put_tile_thread (int id) {
 				count += 1;	
 		}
 		put_tile((unsigned int)tile_hi, (unsigned int)tile_wi, id);
+		printf("Tile: %2d,%2d | %2d/%2d | thread %2d\n", tile_wi, tile_hi, tile_hi*num_tiles + tile_wi + 1, total_tiles, id);
 		isDone[tile_hi][tile_wi] = true;
 	} while (updateCursor(&tile_wi, &tile_hi, num_threads));
 }
