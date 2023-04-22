@@ -5,7 +5,7 @@ TARGET = ImageQuiltBin
 SRCS = $(wildcard ./*.cpp)
 OBJS = $(SRCS:.cpp=.o)
 
-CXXFLAGS = -std=c++11 -O2 -Wall -isystem ../extlibs/include/ -I/
+CXXFLAGS = -std=c++11 -O2 -Wall -isystem ../extlibs/include/ -I/ -g -pthread
 
 all: clean $(TARGET)
 

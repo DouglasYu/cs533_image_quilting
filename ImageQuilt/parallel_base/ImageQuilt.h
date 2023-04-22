@@ -6,6 +6,9 @@
 #include "custom_types.h"
 #include <math.h>       /* round, floor, ceil, trunc */
 
+// Added
+#include <thread>
+#include <mutex>
 
 using std::string;
 class ImageQuilt
@@ -33,6 +36,17 @@ public:
 
 		// Added
 		total_tiles = num_tiles * num_tiles;
+		num_threads = std::thread::hardware_concurrency();
+		cursor_x = 1;
+		cursor_y = 0;
+		isDone = std::vector<std::vector<bool>>(num_tiles, std::vector<bool>(num_tiles));
+		for (int i = 0; i < num_tiles; i++) {
+			for (int j = 0; j < num_tiles; j++) {
+				isDone[i][j] = false;
+			}
+		}
+		printf("Output size=%dx%d\n", num_tiles, num_tiles);
+		printf("Number of cores=%d\n", num_threads);
 
 		srand(time(NULL));
 		loadImage();
@@ -50,10 +64,16 @@ private:
 
 	// Added
 	void put_first_tile();
-	void put_tile(unsigned int tile_hi, unsigned int tile_wi);
+	void put_tile(unsigned int tile_hi, unsigned int tile_wi, int id);
+	bool updateCursor(int *x, int *y, int offset);
+	void put_tile_thread(int id);
 
 	// Added
 	unsigned int total_tiles;
+	int num_threads;		// Number of CPU cores available, also number of threads to launch
+	int cursor_x, cursor_y;
+	std::mutex mtx;
+	std::vector<std::vector<bool>> isDone;
 
 	string input_filename = {};
 	string output_filename = {};

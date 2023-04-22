@@ -10,10 +10,9 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-// Added
-#include <thread>
-
 #define USE_CIELAB
+
+#include <functional>
 
 using std::cout;
 using std::endl;
@@ -41,6 +40,7 @@ inline void ImageQuilt::applyPatch(Patch * patch, unsigned int out_w, unsigned i
 // Added
 void ImageQuilt::put_first_tile() {
 	cout << "1/" << total_tiles << endl;
+	isDone[0][0] = true;
 
 	// pick a random patch, apply selected patch to output starting at [0,0]
 	Patch* initial = randomPatch();
@@ -64,9 +64,7 @@ void ImageQuilt::put_first_tile() {
 }
 
 // Added
-void ImageQuilt::put_tile(unsigned int tile_hi, unsigned int tile_wi) {
-	cout << tile_hi*num_tiles + tile_wi + 1 << "/" << total_tiles << endl;
-
+void ImageQuilt::put_tile(unsigned int tile_hi, unsigned int tile_wi, int id) {
 	// coordinates on the output image
 	auto output_w = tile_wi*tilesize - tile_wi*overlap;
 	auto output_h = tile_hi*tilesize - tile_hi*overlap;
@@ -153,7 +151,9 @@ void ImageQuilt::put_tile(unsigned int tile_hi, unsigned int tile_wi) {
 	unsigned int patch_w = distances[distances.size() - randNum - 1].first.first;
 	unsigned int patch_h = distances[distances.size() - randNum - 1].first.second;
 	double err = distances[distances.size() - randNum - 1].second;
+	printf("%d/%d (thread %d) ", tile_hi*num_tiles + tile_wi + 1, total_tiles, id);
 	cout << "Picked: " << randNum << " out of: " << matches << " with error: " << err << " lowest: " << lowest << endl;
+	// printf("[Test] Thread %d completed (%d, %d)\n", id, tile_wi, tile_hi);
 	
 	/** 
 	 * 3. Create a tempoary tile[Patch] as the workstation.
@@ -199,17 +199,65 @@ void ImageQuilt::put_tile(unsigned int tile_hi, unsigned int tile_wi) {
 	delete patch;
 }
 
-// Modified
-void ImageQuilt::synthesize()
-{
-	put_first_tile();
-
-	for (unsigned int tile_hi = 0; tile_hi < num_tiles; tile_hi++) {
-		for (unsigned int tile_wi = 0; tile_wi < num_tiles; tile_wi++) {
-			if (tile_hi == 0 && tile_wi == 0) continue;
-			put_tile(tile_hi, tile_wi);
+// Added
+bool ImageQuilt::updateCursor(int *x, int *y, int offset) {
+	int xn = *x - offset;
+	int yn = *y + offset;
+	int itcp = xn + yn;
+	int delta;
+	while (xn < 0 || yn >= num_tiles) {
+		if (itcp < num_tiles - 1) {
+			itcp += 1;
+			delta = - xn - 1;
+			xn = itcp - delta;
+			yn = delta;
+		} else if (itcp >= num_tiles - 1 && itcp < 2 * num_tiles - 2) {
+			itcp += 1;
+			delta = yn - num_tiles;
+			xn = num_tiles - 1 - delta;
+			yn = itcp - num_tiles + delta + 1;
+		} else {
+			return false;
 		}
 	}
+	*x = xn;
+	*y = yn;
+	return true;
+}
+
+// Added
+void ImageQuilt::put_tile_thread (int id) {
+	int tile_wi = 0;	// x
+	int tile_hi = 0; 	// y
+	int count = 0;
+
+	updateCursor(&tile_wi, &tile_hi, id+1);
+	do {
+		// Spin until all dependences are resolved
+		while (count != 2) {
+			count = 0;
+			if (tile_wi == 0 || isDone[tile_hi][tile_wi-1])
+				count += 1;
+			if (tile_hi == 0 || isDone[tile_hi-1][tile_wi])
+				count += 1;	
+		}
+		put_tile((unsigned int)tile_hi, (unsigned int)tile_wi, id);
+		isDone[tile_hi][tile_wi] = true;
+	} while (updateCursor(&tile_wi, &tile_hi, num_threads));
+}
+
+// Modified
+void ImageQuilt::synthesize() {
+	put_first_tile();
+
+	std::vector<std::thread> threads;
+	for (int i = 0; i < num_threads; i++) {
+        threads.emplace_back([this, i] {put_tile_thread(i);});
+    }
+
+	for (auto& thread : threads) {
+        thread.join();
+    }
 
 	// store the result to .bmp
 	output_image->cielab2xyz();
