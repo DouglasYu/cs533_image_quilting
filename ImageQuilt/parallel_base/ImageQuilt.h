@@ -67,6 +67,7 @@ private:
 	void put_tile(unsigned int tile_hi, unsigned int tile_wi, int id);
 	bool updateCursor(int *x, int *y, int offset);
 	void put_tile_thread(int id);
+	// void printMtx();
 
 	// Added
 	unsigned int total_tiles;

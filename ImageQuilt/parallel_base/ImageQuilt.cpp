@@ -39,7 +39,7 @@ inline void ImageQuilt::applyPatch(Patch * patch, unsigned int out_w, unsigned i
 
 // Added
 void ImageQuilt::put_first_tile() {
-	cout << "1/" << total_tiles << endl;
+	printf("Tile:  0, 0 |  1/64 | thread  x\n");
 	isDone[0][0] = true;
 
 	// pick a random patch, apply selected patch to output starting at [0,0]
@@ -226,6 +226,18 @@ bool ImageQuilt::updateCursor(int *x, int *y, int offset) {
 	return true;
 }
 
+// void ImageQuilt::printMtx() {
+// 	for (int i = 0; i < num_tiles; i++) {
+// 		for (int j = 0; j < num_tiles; j++) {
+// 			if (isDone[i][j] == true)
+// 				printf("1 ");
+// 			else
+// 				printf("0 ");
+// 		}
+// 		printf("\n");
+// 	}
+// }
+
 // Added
 void ImageQuilt::put_tile_thread (int id) {
 	int tile_wi = 0;	// x
@@ -236,6 +248,7 @@ void ImageQuilt::put_tile_thread (int id) {
 
 	updateCursor(&tile_wi, &tile_hi, id+1);
 	do {
+		count = 0;
 		// Spin until all dependences are resolved
 		while (count != 2) {
 			count = 0;
@@ -244,6 +257,7 @@ void ImageQuilt::put_tile_thread (int id) {
 			if (tile_hi == 0 || isDone[tile_hi-1][tile_wi])
 				count += 1;	
 		}
+		// printMtx();
 		put_tile((unsigned int)tile_hi, (unsigned int)tile_wi, id);
 		printf("Tile: %2d,%2d | %2d/%2d | thread %2d\n", tile_wi, tile_hi, tile_hi*num_tiles + tile_wi + 1, total_tiles, id);
 		isDone[tile_hi][tile_wi] = true;
