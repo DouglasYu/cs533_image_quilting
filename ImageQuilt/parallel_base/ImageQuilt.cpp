@@ -10,6 +10,8 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+// Added
+#include <thread>
 
 #define USE_CIELAB
 
@@ -36,12 +38,10 @@ inline void ImageQuilt::applyPatch(Patch * patch, unsigned int out_w, unsigned i
 	output_image->b(out_w, out_h, patch->image->b(inner_w, inner_h));
 }
 
-void ImageQuilt::synthesize()
-{
+// Added
+void ImageQuilt::put_first_tile() {
+	cout << "1/" << total_tiles << endl;
 
-	/**
-	 * @brief 1. Put the first tile. 
-	 */
 	// pick a random patch, apply selected patch to output starting at [0,0]
 	Patch* initial = randomPatch();
 	input_image->rgb2xyz();
@@ -61,159 +61,157 @@ void ImageQuilt::synthesize()
 		line++;
 		col = 0;
 	}
+}
 
-	// output_image->cielab2xyz();
-	// output_image->xyz2rgb();
-	// stbi_write_bmp(output_filename.c_str(), output_width, output_height, 3, output_image->data);
+// Added
+void ImageQuilt::put_tile(unsigned int tile_hi, unsigned int tile_wi) {
+	cout << tile_hi*num_tiles + tile_wi + 1 << "/" << total_tiles << endl;
 
-	/**
-	 * @brief 2. Put the remaining tiles, start placing them from left to right, top to bottom
+	// coordinates on the output image
+	auto output_w = tile_wi*tilesize - tile_wi*overlap;
+	auto output_h = tile_hi*tilesize - tile_hi*overlap;
+
+	/** 
+	 * 1. scan input image 
+	 * For every location, search the input texture for a set of blocks that satisfy the overlap constraints(above and left) within some error tolerance.
+	 * Randomly pick one such block.
 	 */
-	unsigned int total_tiles = num_tiles * num_tiles;
-	for (unsigned int tile_hi = 0; tile_hi < num_tiles; tile_hi++) {
-	for (unsigned int tile_wi = 0; tile_wi < num_tiles; tile_wi++) {
+	double lowest = DBL_MAX;
+	vector<pair<pair<int, int>, double>> distances;
+	// bool found_zero = false;
+	for (unsigned int img_h = 0; img_h < input_image->height - tilesize; img_h++) {
+	for (unsigned int img_w = 0; img_w < input_image->width - tilesize; img_w++) {
 
-		cout << tile_hi*num_tiles + tile_wi + 1 << "/" << total_tiles << endl;
-
-		// first patch has already been placed
-		if (tile_wi == 0 && tile_hi == 0) continue;
-
-		// coordinates on the output image
-		auto output_w = tile_wi*tilesize - tile_wi*overlap;
-		auto output_h = tile_hi*tilesize - tile_hi*overlap;
-
-		/** 
-		 * 1. scan input image 
-		 * For every location, search the input texture for a set of blocks that satisfy the overlap constraints(above and left) within some error tolerance.
-		 * Randomly pick one such block.
+		/**
+		 * 1A. Find a region in the input picture that have the lowest error ratio with the 
+		 * current output picture overlap portion
 		 */
-		double lowest = DBL_MAX;
-		vector<pair<pair<int, int>, double>> distances;
-		// bool found_zero = false;
-		for (unsigned int img_h = 0; img_h < input_image->height - tilesize; img_h++) {
-		for (unsigned int img_w = 0; img_w < input_image->width - tilesize; img_w++) {
-
-			/**
-			 * 1A. Find a region in the input picture that have the lowest error ratio with the 
-			 * current output picture overlap portion
-			 */
-			double sum = 0.0;
-			if(tile_hi == 0 && tile_wi > 0) //First Row
-			{
-				for (unsigned int inner_h = 0; inner_h < tilesize; inner_h++) {
-				for (unsigned int inner_w = 0; inner_w < overlap; inner_w++) {
-					sum += errorCalc(img_w + inner_w, img_h + inner_h, output_w + inner_w, output_h + inner_h);
-				}}
-			}
-			else if(tile_hi > 0 && tile_wi == 0) //First Column
-			{
-				for (unsigned int inner_h = 0; inner_h < overlap; inner_h++) {
-				for (unsigned int inner_w = 0; inner_w < tilesize; inner_w++) {
-					sum += errorCalc(img_w + inner_w, img_h + inner_h, output_w + inner_w, output_h + inner_h);
-				}}
-			}
-			else //Normal situations
-			{
-				for (unsigned int inner_h = 0; inner_h < overlap; inner_h++) {
-				for (unsigned int inner_w = 0; inner_w < tilesize; inner_w++) {
-					sum += errorCalc(img_w + inner_w, img_h + inner_h, output_w + inner_w, output_h + inner_h);
-				}}
-				for (unsigned int inner_h = overlap; inner_h < tilesize; inner_h++) {
-				for (unsigned int inner_w = 0; inner_w < overlap; inner_w++) {
-					sum += errorCalc(img_w + inner_w, img_h + inner_h, output_w + inner_w, output_h + inner_h);
-				}}
-			}
-
-			sum = sqrt(sum);
-			if(sum == 0.0)	//Perfect match
-			{
-				distances.clear();
-				pair<int, int> location(img_w, img_h);
-				pair<pair<int, int>, double> element(location, sum);
-				distances.push_back(element);
-				// found_zero = true;
-				// cout << "zero" << endl;
-				goto scan_finish;
-			}
-			else if (sum <= (1+error)*lowest) {
-				if (sum < lowest) {
-					lowest = sum;
-					// cout << "Lowest: " << lowest << endl;
-				}
-				pair<int, int> location(img_w, img_h);
-				pair<pair<int, int>, double> element(location, sum);
-				distances.push_back(element);
-			}
-		}}
-
-		scan_finish:
-		// count how many patches are below the cutoff
-		auto cutoff = (1 + error)*lowest;
-		auto matches = -1;
-		for (vector<pair<pair<int, int>, double>>::reverse_iterator it = distances.rbegin(); it != distances.rend(); ++it) {
-			if (it->second > cutoff) break;
-			matches++;
+		double sum = 0.0;
+		if(tile_hi == 0 && tile_wi > 0) //First Row
+		{
+			for (unsigned int inner_h = 0; inner_h < tilesize; inner_h++) {
+			for (unsigned int inner_w = 0; inner_w < overlap; inner_w++) {
+				sum += errorCalc(img_w + inner_w, img_h + inner_h, output_w + inner_w, output_h + inner_h);
+			}}
+		}
+		else if(tile_hi > 0 && tile_wi == 0) //First Column
+		{
+			for (unsigned int inner_h = 0; inner_h < overlap; inner_h++) {
+			for (unsigned int inner_w = 0; inner_w < tilesize; inner_w++) {
+				sum += errorCalc(img_w + inner_w, img_h + inner_h, output_w + inner_w, output_h + inner_h);
+			}}
+		}
+		else //Normal situations
+		{
+			for (unsigned int inner_h = 0; inner_h < overlap; inner_h++) {
+			for (unsigned int inner_w = 0; inner_w < tilesize; inner_w++) {
+				sum += errorCalc(img_w + inner_w, img_h + inner_h, output_w + inner_w, output_h + inner_h);
+			}}
+			for (unsigned int inner_h = overlap; inner_h < tilesize; inner_h++) {
+			for (unsigned int inner_w = 0; inner_w < overlap; inner_w++) {
+				sum += errorCalc(img_w + inner_w, img_h + inner_h, output_w + inner_w, output_h + inner_h);
+			}}
 		}
 
-		/** 
-		 * 2. From all the potential choice candidates[Ones below the err cutoff]
-		 * we randomly choose one to be the resulting tile
-		 */
-		unsigned int randNum = rand() % (matches - 0 + 1);
-		//cout << "Picked: " << randNum << endl;
-		unsigned int patch_w = distances[distances.size() - randNum - 1].first.first;
-		unsigned int patch_h = distances[distances.size() - randNum - 1].first.second;
-		double err = distances[distances.size() - randNum - 1].second;
-		cout << "Picked: " << randNum << " out of: " << matches << " with error: " << err << " lowest: " << lowest << endl;
-		
-		/** 
-		 * 3. Create a tempoary tile[Patch] as the workstation.
-		 * On this workstation, we find out a cutline in the overlay portion, outside this cutline, we place the existing portion 
-		 * of the output image; within this cutline, we place the portion from the input_image.
-		 */
-		Patch* patch = new Patch(patch_w, patch_h, tilesize, tilesize, input_image);
-		patch->image->rgb2xyz();
-		patch->image->xyz2cielab();
-
-		/* Only do patching if we have err, else we could directly copy and paste */
-		if (err > 0) {
-
-			if (tile_wi > 0) //left overlap
-			{
-				auto final_cut = minCut(output_w, output_h, patch_w, patch_h, true);
-				for (unsigned int inner_h = 0; inner_h < tilesize; inner_h++){
-				for (int inner_w = 0; inner_w < final_cut->at(inner_h); inner_w++){
-					fillPatch(patch, inner_w, inner_h, output_w + inner_w, output_h + inner_h);
-				}}
-				delete final_cut;
-			}
-			
-			if (tile_hi > 0) // top overlap
-			{
-				auto final_cut = minCut(output_w, output_h, patch_w, patch_h, false);
-				for (unsigned int inner_w = 0; inner_w < tilesize; inner_w++){
-				for (int inner_h = 0; inner_h < final_cut->at(inner_w); inner_h++){
-					fillPatch(patch, inner_w, inner_h, output_w + inner_w, output_h + inner_h);
-				}}
-				delete final_cut;
-			}
+		sum = sqrt(sum);
+		if(sum == 0.0)	//Perfect match
+		{
+			distances.clear();
+			pair<int, int> location(img_w, img_h);
+			pair<pair<int, int>, double> element(location, sum);
+			distances.push_back(element);
+			// found_zero = true;
+			// cout << "zero" << endl;
+			goto scan_finish;
 		}
-
-		/** 
-		 * 4. We copy the content from this tempoary workstation[Patch] to the output image
-		 */
-		for (unsigned int inner_h = 0; inner_h < tilesize; inner_h++){
-		for (unsigned int inner_w = 0; inner_w < tilesize; inner_w++){
-			applyPatch(patch, output_w + inner_w, output_h + inner_h, inner_w, inner_h);
-		}}
-
-		delete patch;
-		// output_image->cielab2xyz();
-		// output_image->xyz2rgb();
-		// stbi_write_bmp(output_filename.c_str(), output_width, output_height, 3, output_image->data);
+		else if (sum <= (1+error)*lowest) {
+			if (sum < lowest) {
+				lowest = sum;
+				// cout << "Lowest: " << lowest << endl;
+			}
+			pair<int, int> location(img_w, img_h);
+			pair<pair<int, int>, double> element(location, sum);
+			distances.push_back(element);
+		}
 	}}
-	// store the result to .bmp
 
+	scan_finish:
+	// count how many patches are below the cutoff
+	auto cutoff = (1 + error)*lowest;
+	auto matches = -1;
+	for (vector<pair<pair<int, int>, double>>::reverse_iterator it = distances.rbegin(); it != distances.rend(); ++it) {
+		if (it->second > cutoff) break;
+		matches++;
+	}
+
+	/** 
+	 * 2. From all the potential choice candidates[Ones below the err cutoff]
+	 * we randomly choose one to be the resulting tile
+	 */
+	unsigned int randNum = rand() % (matches - 0 + 1);
+	//cout << "Picked: " << randNum << endl;
+	unsigned int patch_w = distances[distances.size() - randNum - 1].first.first;
+	unsigned int patch_h = distances[distances.size() - randNum - 1].first.second;
+	double err = distances[distances.size() - randNum - 1].second;
+	cout << "Picked: " << randNum << " out of: " << matches << " with error: " << err << " lowest: " << lowest << endl;
+	
+	/** 
+	 * 3. Create a tempoary tile[Patch] as the workstation.
+	 * On this workstation, we find out a cutline in the overlay portion, outside this cutline, we place the existing portion 
+	 * of the output image; within this cutline, we place the portion from the input_image.
+	 */
+	Patch* patch = new Patch(patch_w, patch_h, tilesize, tilesize, input_image);
+	patch->image->rgb2xyz();
+	patch->image->xyz2cielab();
+
+	/* Only do patching if we have err, else we could directly copy and paste */
+	if (err > 0) {
+
+		if (tile_wi > 0) //left overlap
+		{
+			auto final_cut = minCut(output_w, output_h, patch_w, patch_h, true);
+			for (unsigned int inner_h = 0; inner_h < tilesize; inner_h++){
+			for (int inner_w = 0; inner_w < final_cut->at(inner_h); inner_w++){
+				fillPatch(patch, inner_w, inner_h, output_w + inner_w, output_h + inner_h);
+			}}
+			delete final_cut;
+		}
+		
+		if (tile_hi > 0) // top overlap
+		{
+			auto final_cut = minCut(output_w, output_h, patch_w, patch_h, false);
+			for (unsigned int inner_w = 0; inner_w < tilesize; inner_w++){
+			for (int inner_h = 0; inner_h < final_cut->at(inner_w); inner_h++){
+				fillPatch(patch, inner_w, inner_h, output_w + inner_w, output_h + inner_h);
+			}}
+			delete final_cut;
+		}
+	}
+
+	/** 
+	 * 4. We copy the content from this tempoary workstation[Patch] to the output image
+	 */
+	for (unsigned int inner_h = 0; inner_h < tilesize; inner_h++){
+	for (unsigned int inner_w = 0; inner_w < tilesize; inner_w++){
+		applyPatch(patch, output_w + inner_w, output_h + inner_h, inner_w, inner_h);
+	}}
+
+	delete patch;
+}
+
+// Modified
+void ImageQuilt::synthesize()
+{
+	put_first_tile();
+
+	for (unsigned int tile_hi = 0; tile_hi < num_tiles; tile_hi++) {
+		for (unsigned int tile_wi = 0; tile_wi < num_tiles; tile_wi++) {
+			if (tile_hi == 0 && tile_wi == 0) continue;
+			put_tile(tile_hi, tile_wi);
+		}
+	}
+
+	// store the result to .bmp
 	output_image->cielab2xyz();
 	output_image->xyz2rgb();
 	stbi_write_bmp(output_filename.c_str(), output_width, output_height, 3, output_image->data);

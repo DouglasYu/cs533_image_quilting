@@ -13,4 +13,4 @@ $(TARGET): $(OBJS)
 	$(CC) $(CXXFLAGS) $^ -o $@
 
 clean:
-	rm -f $(OBJS) $(TARGET) $(PARALLEL_OBJS_v1)
+	rm -f $(OBJS) $(TARGET)
