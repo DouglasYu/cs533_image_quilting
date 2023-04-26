@@ -36,13 +36,13 @@ public:
 
 		// Added
 		total_tiles = num_tiles * num_tiles;
-		num_threads = std::thread::hardware_concurrency();
+		num_threads = std::thread::hardware_concurrency() - 1;
 		cursor_x = 1;
 		cursor_y = 0;
-		isDone = std::vector<std::vector<bool>>(num_tiles, std::vector<bool>(num_tiles));
-		for (int i = 0; i < num_tiles; i++) {
-			for (int j = 0; j < num_tiles; j++) {
-				isDone[i][j] = false;
+		isDone = std::vector<std::vector<uint64_t>>(num_tiles, std::vector<uint64_t>(num_tiles));
+		for (unsigned int i = 0; i < num_tiles; i++) {
+			for (unsigned int j = 0; j < num_tiles; j++) {
+				isDone[i][j] = 0;
 			}
 		}
 		printf("Output size=%dx%d\n", num_tiles, num_tiles);
@@ -74,7 +74,9 @@ private:
 	int num_threads;		// Number of CPU cores available, also number of threads to launch
 	int cursor_x, cursor_y;
 	std::mutex mtx;
-	std::vector<std::vector<bool>> isDone;
+	std::vector<std::vector<uint64_t>> isDone;
+	// uint32_t isDone[8][8];
+
 
 	string input_filename = {};
 	string output_filename = {};

@@ -4,6 +4,7 @@
 #include <fstream>
 #include <climits>
 #include <queue>
+#include <stdint.h>
 #define STBI_ONLY_BMP
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -18,6 +19,29 @@ using std::cout;
 using std::endl;
 using std::vector;
 using std::pair;
+
+uint64_t rdtsc(){
+    unsigned int lo,hi;
+    __asm__ __volatile__ ("rdtsc" : "=a" (lo), "=d" (hi));
+    return ((uint64_t)hi << 32) | lo;
+}
+
+template <class Tp>
+inline void DoNotOptimize(Tp const& value) {
+  asm volatile("" : : "r,m"(value) : "memory");
+}
+
+template <class Tp>
+inline void DoNotOptimize(Tp& value) {
+#if defined(__clang__)
+  asm volatile("" : "+r,m"(value) : : "memory");
+#else
+  asm volatile("" : "+m,r"(value) : : "memory");
+#endif
+}
+
+uint64_t global_start_time;
+
 
 ImageQuilt::~ImageQuilt()
 {
@@ -40,7 +64,7 @@ inline void ImageQuilt::applyPatch(Patch * patch, unsigned int out_w, unsigned i
 // Added
 void ImageQuilt::put_first_tile() {
 	printf("Tile:  0, 0 |  1/64 | thread  x\n");
-	isDone[0][0] = true;
+	isDone[0][0] = rdtsc() - global_start_time;
 
 	// pick a random patch, apply selected patch to output starting at [0,0]
 	Patch* initial = randomPatch();
@@ -76,10 +100,11 @@ void ImageQuilt::put_tile(unsigned int tile_hi, unsigned int tile_wi, int id) {
 	 */
 	double lowest = DBL_MAX;
 	vector<pair<pair<int, int>, double>> distances;
+	uint64_t inner_loop_count = 0;
 	// bool found_zero = false;
 	for (unsigned int img_h = 0; img_h < input_image->height - tilesize; img_h++) {
 	for (unsigned int img_w = 0; img_w < input_image->width - tilesize; img_w++) {
-
+		inner_loop_count++;
 		/**
 		 * 1A. Find a region in the input picture that have the lowest error ratio with the 
 		 * current output picture overlap portion
@@ -140,6 +165,7 @@ void ImageQuilt::put_tile(unsigned int tile_hi, unsigned int tile_wi, int id) {
 	for (vector<pair<pair<int, int>, double>>::reverse_iterator it = distances.rbegin(); it != distances.rend(); ++it) {
 		if (it->second > cutoff) break;
 		matches++;
+		inner_loop_count++;
 	}
 
 	/** 
@@ -152,7 +178,7 @@ void ImageQuilt::put_tile(unsigned int tile_hi, unsigned int tile_wi, int id) {
 	unsigned int patch_h = distances[distances.size() - randNum - 1].first.second;
 	double err = distances[distances.size() - randNum - 1].second;
 	// printf("%d/%d (thread %d) ", tile_hi*num_tiles + tile_wi + 1, total_tiles, id);
-	// cout << "Picked: " << randNum << " out of: " << matches << " with error: " << err << " lowest: " << lowest << endl;
+	// cout << id << "--Picked: " << randNum << " out of: " << matches << " with error: " << err << " lowest: " << lowest << " inner_loop_count: " << inner_loop_count << endl;
 	// printf("[Test] Thread %d completed (%d, %d)\n", id, tile_wi, tile_hi);
 	
 	/** 
@@ -238,35 +264,58 @@ bool ImageQuilt::updateCursor(int *x, int *y, int offset) {
 // 	}
 // }
 
-// Added
+
+/**
+ * This is the pre-define location method..
+*/
 void ImageQuilt::put_tile_thread (int id) {
 	int tile_wi = 0;	// x
 	int tile_hi = 0; 	// y
-	int count = 0;
+	uint64_t stall_count = 0;	//Not used, BUT CAN'T BE DELETED!!!
+	uint64_t total_time = 0;
+	uint64_t inefficient_time = 0;
 
-	std::vector<int> v;
+	// std::vector<int> v;
 
 	updateCursor(&tile_wi, &tile_hi, id+1);
 	do {
-		count = 0;
-		// Spin until all dependences are resolved
-		while (count != 2) {
-			count = 0;
-			if (tile_wi == 0 || isDone[tile_hi][tile_wi-1])
-				count += 1;
-			if (tile_hi == 0 || isDone[tile_hi-1][tile_wi])
-				count += 1;	
-		}
+
+		uint64_t start_time = rdtsc();
+		while((tile_wi != 0) && (0 == (isDone[tile_hi][tile_wi-1]))) DoNotOptimize(stall_count++);	//DO NOT DELETE, serve as volatile
+		while((tile_hi != 0) && (0 == (isDone[tile_hi-1][tile_wi]))) DoNotOptimize(stall_count++);
+		uint64_t time_ms = (rdtsc() - start_time)/1000000/2.6;
+
+
 		// printMtx();
+		uint64_t exe_begin_time = rdtsc();
 		put_tile((unsigned int)tile_hi, (unsigned int)tile_wi, id);
-		printf("Tile: %2d,%2d | %2d/%2d | thread %2d\n", tile_wi, tile_hi, tile_hi*num_tiles + tile_wi + 1, total_tiles, id);
-		isDone[tile_hi][tile_wi] = true;
+		uint64_t exe_end_time = (rdtsc() - exe_begin_time)/1000000/2.6;
+		printf("Tile: %2d,%2d | %2d/%2d | thread %2d | execution_time_ms %llu | stall_time_ms %llu | curr_time_ms %llu\n", 
+			tile_wi, tile_hi, tile_hi*num_tiles + tile_wi + 1, total_tiles, id, exe_end_time,time_ms, (uint64_t)((rdtsc() - global_start_time)/1000000/2.6));
+		isDone[tile_hi][tile_wi] = rdtsc() - global_start_time;
+		stall_count = 0;
+
+		total_time += (time_ms + exe_end_time);
+
 	} while (updateCursor(&tile_wi, &tile_hi, num_threads));
+
+	mtx.lock();
+	std::cout << "ID -- " << id << " Total Time -- " << total_time/1000 << std::endl;
+	mtx.unlock();
 }
+
+
+/**
+ * This is the dynamic queue method
+ * AKA we use lock free atomic operation queue to 
+*/
+
+
 
 // Modified
 void ImageQuilt::synthesize() {
 	put_first_tile();
+	global_start_time = rdtsc();
 
 	std::vector<std::thread> threads;
 	for (int i = 0; i < num_threads; i++) {
