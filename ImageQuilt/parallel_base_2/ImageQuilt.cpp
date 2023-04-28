@@ -19,7 +19,7 @@ using std::cout;
 using std::endl;
 using std::vector;
 using std::pair;
-double lowest = DBL_MAX;
+
 
 ImageQuilt::~ImageQuilt()
 {
@@ -54,15 +54,15 @@ void ImageQuilt::search_worker_thread (int id){
 	for (unsigned int tile_hi = 0; tile_hi < num_tiles; tile_hi++) {
 	for (unsigned int tile_wi = 0; tile_wi < num_tiles; tile_wi++) {
 
-		sync_point.arrive_and_wait();
-
 		// first patch has already been placed
 		if (tile_wi == 0 && tile_hi == 0) continue;
 
 		// coordinates on the output image
 		auto output_w = tile_wi*tilesize - tile_wi*overlap;
 		auto output_h = tile_hi*tilesize - tile_hi*overlap;
-		vector<pair<pair<int, int>, double>> local_distances;
+
+		sync_point.arrive_and_wait();
+		local_distances[id].clear();
 
 		for (unsigned int img_h = my_h_start; img_h < (my_h_start + my_h_range); img_h++) {
 		for (unsigned int img_w = 0; img_w < input_image->width - tilesize; img_w++) {
@@ -104,41 +104,31 @@ void ImageQuilt::search_worker_thread (int id){
 				pair<int, int> location(img_w, img_h);
 				pair<pair<int, int>, double> element(location, sum);
 				perfect_match.store(id);
-				local_distances.clear();
-				local_distances.push_back(element);
+				local_distances[id].clear();
+				local_distances[id].push_back(element);
+				// std::cout << id << " -- I have perfect match" << std::endl;
 				goto local_scan_finish;
 			}
-			else if (sum <= (1+error)*lowest) {
-				if (sum < lowest) {
-					lowest = sum;
+			else if (sum <= (1+error)*lowest.load()) {
+				if (sum < lowest.load()) {
+					lowest.store(sum);
 					// cout << "Lowest: " << lowest << endl;
 				}
 				pair<int, int> location(img_w, img_h);
 				pair<pair<int, int>, double> element(location, sum);
-				local_distances.push_back(element);
+				local_distances[id].push_back(element);
 			}
 
 			//Optimization Point, quit early if possible
-			if (perfect_match.load() != -1)	goto local_scan_finish;
+			if (perfect_match.load() != -1){
+				// std::cout << id << " -- Detect perfetch_Match" << std::endl;
+				local_distances[id].clear();
+				goto local_scan_finish;
+			}
 		}}
 
 		/* Copy Memory Barrier to sync*/
 		local_scan_finish:
-
-		//Copy to Distance if necessary
-		if (perfect_match.load() == -1){
-			mtx.lock();
-			distances.insert(
-				distances.end(), 
-				std::make_move_iterator(local_distances.begin()),
-				std::make_move_iterator(local_distances.end())
-			);
-			mtx.unlock();
-		}
-		else if (perfect_match.load() == id){
-			distances = std::move(local_distances);
-		}
-		
 		sync_point.arrive_and_wait();
 	}}
 }
@@ -146,8 +136,6 @@ void ImageQuilt::search_worker_thread (int id){
 
 void ImageQuilt::synthesize()
 {
-
-
 
 	/**
 	 * @brief 1. Put the first tile. 
@@ -176,8 +164,6 @@ void ImageQuilt::synthesize()
 	/**
 	 * @brief 2. Fire up Searching Worker Thread
 	 */
-
-	perfect_match.store(-1);
 	num_threads = std::min(input_image->height, (unsigned int)num_threads);
 	std::vector<std::thread> threads;
 	for (int i = 0; i < num_threads; i++)
@@ -206,28 +192,35 @@ void ImageQuilt::synthesize()
 		 * Randomly pick one such block.
 		 */
 		/* Workder Thread Do Their Job */
-		distances.clear();
+		perfect_match.store(-1);
+		lowest.store(DBL_MAX);
 		sync_point.arrive_and_wait();
 		sync_point.arrive_and_wait();
-
 
 		// count how many patches are below the cutoff
 		auto cutoff = (1 + error)*lowest;
 		auto matches = -1;
-		for (vector<pair<pair<int, int>, double>>::reverse_iterator it = distances.rbegin(); it != distances.rend(); ++it) {
-			if (it->second > cutoff) break;
-			matches++;
+		std::vector<std::pair<std::pair<int, int>, double>> distance_pool;
+
+		for (auto& local:local_distances){
+			// std::cout << "size of local " << local.size() << std::endl;
+			for (vector<pair<pair<int, int>, double>>::reverse_iterator it = local.rbegin(); it != local.rend(); ++it) {
+				if (it->second > cutoff) break;
+				matches++;
+				distance_pool.push_back(*it);
+			}
 		}
 
+		std::cout << "Cutoff - " << cutoff << " Matches: " << matches << "Lowest: " << lowest.load() << std::endl;
 		/** 
 		 * 2. From all the potential choice candidates[Ones below the err cutoff]
 		 * we randomly choose one to be the resulting tile
 		 */
 		unsigned int randNum = rand() % (matches - 0 + 1);
 		//cout << "Picked: " << randNum << endl;
-		unsigned int patch_w = distances[distances.size() - randNum - 1].first.first;
-		unsigned int patch_h = distances[distances.size() - randNum - 1].first.second;
-		double err = distances[distances.size() - randNum - 1].second;
+		unsigned int patch_w = distance_pool[randNum].first.first;
+		unsigned int patch_h = distance_pool[randNum].first.second;
+		double err = distance_pool[randNum].second;
 		cout << "Picked: " << randNum << " out of: " << matches << " with error: " << err << " lowest: " << lowest << endl;
 		
 		/** 

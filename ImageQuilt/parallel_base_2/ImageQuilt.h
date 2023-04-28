@@ -23,7 +23,9 @@ public:
 		  num_tiles(_num_tiles),
 		  overlap(_overlap),
 		  error(_error),
-		  sync_point(std::thread::hardware_concurrency())
+		  num_threads(std::thread::hardware_concurrency() - 1),	
+		  sync_point(std::thread::hardware_concurrency()),
+		  local_distances(std::vector<std::vector<std::pair<std::pair<int, int>, double>>>(std::thread::hardware_concurrency() - 1))
 
 	{
 		if (overlap == 0)
@@ -40,7 +42,7 @@ public:
 		output_image = new Image(output_width, output_height);
 
 		//Add
-		num_threads = std::thread::hardware_concurrency() - 1;	
+
 
 
 		srand(time(NULL));
@@ -63,9 +65,11 @@ private:
 
 	//Synch related
 	std::atomic<int32_t> perfect_match;	//used for optimization
+	std::atomic<double>	lowest;
 	std::barrier<decltype([]() noexcept {})> sync_point;
 	std::mutex mtx;
-	std::vector<std::pair<std::pair<int, int>, double>> distances;
+
+	std::vector<std::vector<std::pair<std::pair<int, int>, double>>> local_distances;
 
 
 	string input_filename = {};
